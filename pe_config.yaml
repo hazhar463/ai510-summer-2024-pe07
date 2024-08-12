@@ -1,0 +1,70 @@
+# Namespace config (like workspace/project)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pe-namespace # Updated for PE
+---
+# Deploy container/pod
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pe-pod-deploy # Updated for PE
+  namespace: pe-namespace # Updated for PE - Deploy to this namespace(like workspace/project)
+spec:
+  selector:
+    matchLabels:
+      app: pe-app
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: pe-app # This will be referenced by service
+    spec:
+      containers:
+      - name: pe-container # not referenced but for future usage
+        image: nginx # Updated for PE - we will be using prebuilt container
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "250m"
+        ports:
+        - containerPort: 80 # Updated for PE - nginx uses port 80
+---
+# deploy service which configures 
+apiVersion: v1
+kind: Service
+metadata:
+  name: pe-svc # Updated for PE - New service name and match to svc/ingress
+  namespace: pe-namespace # Updated for PE - deploy to this namespace(like workspace/project)
+spec:
+  selector:
+    app: pe-app # referencing deployed deployment: Deployment > spec.template.metadata.labels.app  
+  ports:
+  - protocol: "TCP"
+    port: 6000 # Ingress will connect to this port
+    targetPort: 80 # Updated for PE - nginx uses port 80, actual deployed container port
+  type: ClusterIP
+---
+# if you are using docker driver or want to use minikube add-on ingress:
+# be sure to enable ingress on minikube “minikube addons enable ingress”
+# and run "minikube tunnel" on a separate terminal
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pe-ing
+  namespace: pe-namespace # Updated for PE
+  annotations:
+    spec.ingressClassName: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  rules:
+    - http: # any connection coming through port 80
+        paths:
+          - pathType: ImplementationSpecific
+            path: /pe-app # Updated for PE - visit browser at this path
+            backend:
+              service:
+                name: pe-svc # Updated for PE - New service name and match to svc/ingress
+                port: 
+                  number: 6000 # this is to access service not external exposed port
